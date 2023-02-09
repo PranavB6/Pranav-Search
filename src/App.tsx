@@ -1,34 +1,45 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import './App.css'
+import { useState } from "react";
+
+import "./App.css";
+import Header from "./components/Header";
+import Banner from "./components/Banner";
+import SearchBar from "./components/SearchBar";
+import Endorsements from "./components/Endorsements";
+import Footer from "./components/Footer";
 
 function App() {
-  const [count, setCount] = useState(0)
+  console.log("VITE_SECRET_MESSAGE: ", import.meta.env.VITE_SECRET_MESSAGE);
 
   return (
-    <div className="App">
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+    <div className="flex flex-col h-screen">
+      <Header />
+
+      {/* Main Content */}
+      <main className="grow container mx-auto">
+        <div className="">
+          <section className="mt-40">
+            <Banner />
+            <form method="get" action="https://www.google.com/search">
+              <SearchBar />
+
+              <div className="mt-8 flex justify-center space-x-3">
+                <button type="submit" className="button">
+                  Pranav Search
+                </button>
+                <button className="button">I'm Feeling Pranav</button>
+              </div>
+            </form>
+
+            <div className="mt-8">
+              <Endorsements />
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <Footer />
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

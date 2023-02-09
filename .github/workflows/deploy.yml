@@ -1,0 +1,121 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+
+env:
+  IMAGE_NAME: pranavb6/pranav-search
+  VULTR_HOSTNAME: ${{ secrets.GAIA_HOSTNAME }}
+  VULTR_USER: root
+  VULTR_PORT: 22
+  VULTR_SSH_KEY: ${{ secrets.GAIA_SSH_KEY }}
+  SECRET_MESSAGE: ${{ secrets.SECRET_MESSAGE }}
+  BANNER_NAME: Pranavi
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+      - name: Install npm dependencies
+        run: npm install
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: dist
+
+  deploy_to_docker:
+    runs-on: ubuntu-latest
+    needs: build_and_test
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=true
+
+      - name: Build and push Docker image
+        id: docker_build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            "SECRET_MESSAGE_ARG=${{ env.SECRET_MESSAGE }}"
+            "BANNER_NAME_ARG=${{ env.BANNER_NAME }}"
+  deploy_to_vultr:
+    runs-on: ubuntu-latest
+    needs: deploy_to_docker
+    steps:
+      - name: Deploy to Vultr
+        uses: appleboy/ssh-action@v0.1.7
+        env:
+          CONTAINER_NAME: pranav-search
+        with:
+          host: ${{ env.VULTR_HOSTNAME }}
+          username: ${{ env.VULTR_USER }}
+          port: ${{ env.VULTR_PORT }}
+          key: ${{ env.VULTR_SSH_KEY }}
+          script_stop: true # stop script if any command fails
+          script: |
+            echo Hello from $HOSTNAME
+
+            echo Pulling image ${{ env.IMAGE_NAME }}
+            docker pull ${{ env.IMAGE_NAME }}
+
+            echo Stopping and removing container ${{ env.CONTAINER_NAME }}
+            docker stop ${{ env.CONTAINER_NAME }}
+            docker rm ${{ env.CONTAINER_NAME }}
+
+            echo Starting container ${{ env.CONTAINER_NAME }}
+            docker run -d --name ${{ env.CONTAINER_NAME }} -p 80:80 ${{ env.IMAGE_NAME }}
+
+  # Get_OIDC_ID_token:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     # actions/checkout MUST come before auth
+  #     - uses: "actions/checkout@v3"
+  #     - id: "auth"
+  #       name: "Authenticate to GCP"
+  #       uses: "google-github-actions/auth@v1"
+  #       with:
+  #         create_credentials_file: "true"
+  #         workload_identity_provider: "projects/377961128619/locations/global/workloadIdentityPools/github-actions-pool/provider/github-actions-provider"
+  #         service_account: "service-account@exalted-booster-377120.iam.gserviceaccount.com"
+  #     - id: "gcloud"
+  #       name: "gcloud"
+  #       run: |-
+  #         gcloud auth login --brief --cred-file="${{ steps.auth.outputs.credentials_file_path }}"
+  #         gcloud services list

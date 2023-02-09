@@ -6,6 +6,7 @@ on:
       - main
     tags:
       - v*
+  workflow_dispatch:
 
 env:
   IMAGE_NAME: pranavb6/pranav-search
@@ -14,14 +15,29 @@ env:
   VULTR_PORT: 22
   VULTR_SSH_KEY: ${{ secrets.GAIA_SSH_KEY }}
   SECRET_MESSAGE: ${{ secrets.SECRET_MESSAGE }}
-  BANNER_NAME: Pranavi
+  BANNER_NAME: Pranav
 
 permissions:
   contents: read
   id-token: write
+  security-events: write
 
 jobs:
-  build_and_test:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3
+
+      # CodeQL tools for security scanning
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+  build-and-test-npm-project:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repo
@@ -30,21 +46,29 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: 16
+
+      # install dependencies
       - name: Install npm dependencies
         run: npm install
+
+      # run the tests
       - name: Test
         run: npm test
+
+      # build the project
       - name: Build
         run: npm run build
+
+      # upload the build artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v2
         with:
           name: dist
           path: dist
 
-  deploy_to_docker:
+  build-and-push-docker-image:
     runs-on: ubuntu-latest
-    needs: build_and_test
+    needs: build-and-test-npm-project
     steps:
       - name: Check out repo
         uses: actions/checkout@v3
@@ -75,9 +99,9 @@ jobs:
           build-args: |
             "SECRET_MESSAGE_ARG=${{ env.SECRET_MESSAGE }}"
             "BANNER_NAME_ARG=${{ env.BANNER_NAME }}"
-  deploy_to_vultr:
+  deploy-image-to-vultr:
     runs-on: ubuntu-latest
-    needs: deploy_to_docker
+    needs: build-and-push-docker-image
     steps:
       - name: Deploy to Vultr
         uses: appleboy/ssh-action@v0.1.7
@@ -102,20 +126,25 @@ jobs:
             echo Starting container ${{ env.CONTAINER_NAME }}
             docker run -d --name ${{ env.CONTAINER_NAME }} -p 80:80 ${{ env.IMAGE_NAME }}
 
-  # Get_OIDC_ID_token:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     # actions/checkout MUST come before auth
-  #     - uses: "actions/checkout@v3"
-  #     - id: "auth"
-  #       name: "Authenticate to GCP"
-  #       uses: "google-github-actions/auth@v1"
-  #       with:
-  #         create_credentials_file: "true"
-  #         workload_identity_provider: "projects/377961128619/locations/global/workloadIdentityPools/github-actions-pool/provider/github-actions-provider"
-  #         service_account: "service-account@exalted-booster-377120.iam.gserviceaccount.com"
-  #     - id: "gcloud"
-  #       name: "gcloud"
-  #       run: |-
-  #         gcloud auth login --brief --cred-file="${{ steps.auth.outputs.credentials_file_path }}"
-  #         gcloud services list
+  deploy-image-to-gcp:
+    runs-on: ubuntu-latest
+    # needs: build-and-push-docker-image
+    steps:
+      # actions/checkout MUST come before auth
+      - uses: "actions/checkout@v3"
+      - id: "auth"
+        name: "Authenticate to GCP"
+        uses: "google-github-actions/auth@v0.3.1"
+        with:
+          create_credentials_file: "true"
+          workload_identity_provider: "projects/338470562339/locations/global/workloadIdentityPools/wave-pool/providers/github-actions"
+          service_account: "bobbie@pranav-search.iam.gserviceaccount.com"
+      # Now you can run gcloud commands authenticated as the impersonated service account.
+      - name: "use gcloud cli"
+        run: |
+          # pull the image and run it in google cloud 
+          echo Credentials File Path: ${{ steps.auth.outputs.credentials_file_path }}
+          cat ${{ steps.auth.outputs.credentials_file_path }}
+          gcloud auth login --brief --cred-file="${{ steps.auth.outputs.credentials_file_path }}"
+          gcloud config set project pranav-search
+          gcloud compute ssh kause --zone=us-central1-c --command="echo 'hello world'"

@@ -128,7 +128,7 @@ jobs:
 
   deploy-image-to-gcp:
     runs-on: ubuntu-latest
-    # needs: build-and-push-docker-image
+    needs: build-and-push-docker-image
     steps:
       # actions/checkout MUST come before auth
       - uses: "actions/checkout@v3"

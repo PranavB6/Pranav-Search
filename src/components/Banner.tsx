@@ -1,5 +1,5 @@
 const Banner: React.FC = () => {
-  const name = import.meta.env.VITE_BANNER_NAME ?? "Pranav";
+  const name = "Bob";
 
   return (
     <>
